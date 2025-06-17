@@ -1,40 +1,47 @@
-# Build stage
-FROM node:20-alpine AS builder
+# Build stage for Go backend
+FROM golang:1.23-alpine AS go-builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-RUN npm ci --only=production
+# Install git (needed for go mod download)
+RUN apk add --no-cache git
+
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN go mod download
 
 # Copy source code
 COPY . .
 
-# Build the application
-RUN npm run build
+# Build the Go binary
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o edgefleet-commander ./cmd/server
 
 # Production stage
-FROM node:20-alpine AS production
+FROM alpine:latest
+
+# Install ca-certificates for HTTPS requests
+RUN apk --no-cache add ca-certificates
 
 WORKDIR /app
 
-# Copy built application and dependencies
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package*.json ./
+# Copy the Go binary from builder stage
+COPY --from=go-builder /app/edgefleet-commander .
+
+# Copy the already built frontend
+COPY dist ./dist
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S edgefleet -u 1001
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -S appuser -u 1001 -G appgroup
 
 # Change ownership
-RUN chown -R edgefleet:nodejs /app
-USER edgefleet
+RUN chown -R appuser:appgroup /app
+USER appuser
 
-EXPOSE 5000
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node healthcheck.js
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/stats || exit 1
 
-CMD ["npm", "start"]
+CMD ["./edgefleet-commander"]
