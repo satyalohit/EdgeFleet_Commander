@@ -48,7 +48,7 @@ export const alertApi = {
 };
 
 export const telemetryApi = {
-  getAllTelemetry: async (limit: number = 1000): Promise<Telemetry[]> => {
+  getAllTelemetry: async (limit: number = 10000): Promise<Telemetry[]> => {
     const response = await fetch(`/api/telemetry?limit=${limit}`);
     if (!response.ok) throw new Error("Failed to fetch telemetry");
     return response.json();
