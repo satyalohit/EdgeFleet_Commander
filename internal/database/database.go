@@ -169,7 +169,7 @@ func (r *RedisClient) seedInitialData() error {
                                 CPUUsage:     10 + rand.Float64()*80,
                                 MemoryUsage:  1024 + rand.Float64()*6144,
                                 MemoryTotal:  8192,
-                                Timestamp:    time.Now(),
+                                Timestamp:    timestamp,
                         }
 
                         telemetryJSON, err := json.Marshal(telemetry)
