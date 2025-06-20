@@ -169,7 +169,7 @@ func (r *RedisClient) seedInitialData() error {
                                 CPUUsage:     10 + rand.Float64()*80,
                                 MemoryUsage:  1024 + rand.Float64()*6144,
                                 MemoryTotal:  8192,
-                                Timestamp:    timestamp,
+                                Timestamp:    time.Now(),
                         }
 
                         telemetryJSON, err := json.Marshal(telemetry)
@@ -183,6 +183,23 @@ func (r *RedisClient) seedInitialData() error {
 
                         telemetryID++
                 }
+                 telemetry := models.Telemetry{
+                ID:           telemetryID,
+                DeviceID:     device.ID,
+                BatteryLevel: 20 + rand.Float64()*70,
+                Temperature:  15 + rand.Float64()*25,
+                CPUUsage:     10 + rand.Float64()*80,
+                MemoryUsage:  1024 + rand.Float64()*6144,
+                MemoryTotal:  8192,
+                Timestamp:    time.Now(),
+            }
+            telemetryJSON, err := json.Marshal(telemetry)
+            if err == nil {
+                r.client.HSet(r.ctx, fmt.Sprintf("telemetry:%d", telemetryID), "data", telemetryJSON)
+                r.client.LPush(r.ctx, fmt.Sprintf("device:%d:telemetry", device.ID), telemetryID)
+                r.client.SAdd(r.ctx, "telemetry:all", telemetryID)
+                telemetryID++
+            }        
         }
 
         // Generate some alerts
