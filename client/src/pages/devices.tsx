@@ -9,9 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { deviceApi, alertApi } from "@/services/api";
+import { deviceApi, alertApi, telemetryApi } from "@/services/api";
 import { useState } from "react";
-import type { Device } from "@/types";
+import type { Device, Telemetry } from "@/types";
 
 export default function Devices() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -32,6 +32,11 @@ export default function Devices() {
     queryFn: alertApi.getAlerts,
   });
 
+  const { data: telemetryData = [], isLoading: telemetryLoading } = useQuery({
+    queryKey: ["/api/telemetry"],
+    queryFn: () => telemetryApi.getAllTelemetry(1000),
+  });
+
   const unacknowledgedAlerts = alerts.filter(alert => !alert.acknowledged);
 
   // Filter devices based on search and filters
@@ -47,6 +52,15 @@ export default function Devices() {
   });
 
   const deviceTypes = Array.from(new Set(devices.map(device => device.type)));
+
+  // Helper to get latest telemetry for a device
+  function getLatestTelemetryForDevice(deviceId: number, telemetryData: Telemetry[]): Telemetry | undefined {
+    const deviceTelemetry = telemetryData.filter(t => t.deviceId === deviceId);
+    if (deviceTelemetry.length === 0) return undefined;
+    return deviceTelemetry.reduce((latest, current) =>
+      new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest
+    );
+  }
 
   if (devicesLoading) {
     return (
@@ -128,20 +142,23 @@ export default function Devices() {
 
           {/* Device Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredDevices.map((device) => (
-              <DeviceCard 
-                key={device.id} 
-                device={device}
-                onEdit={(device) => {
-                  setEditingDevice(device);
-                  setDeviceFormOpen(true);
-                }}
-                onDelete={(device) => {
-                  setDeviceToDelete(device);
-                  setDeleteDialogOpen(true);
-                }}
-              />
-            ))}
+            {filteredDevices.map((device) => {
+              const latestTelemetry = getLatestTelemetryForDevice(device.id, telemetryData);
+              return (
+                <DeviceCard 
+                  key={device.id} 
+                  device={{ ...device, telemetry: latestTelemetry }}
+                  onEdit={(device) => {
+                    setEditingDevice(device);
+                    setDeviceFormOpen(true);
+                  }}
+                  onDelete={(device) => {
+                    setDeviceToDelete(device);
+                    setDeleteDialogOpen(true);
+                  }}
+                />
+              );
+            })}
           </div>
 
           {filteredDevices.length === 0 && (
