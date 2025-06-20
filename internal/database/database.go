@@ -158,8 +158,8 @@ func (r *RedisClient) seedInitialData() error {
         // Generate telemetry data for each device
         telemetryID := 1
         for _, device := range devices {
-                for i := 0; i < 24; i++ {
-                        timestamp := time.Now().Add(-time.Duration(i) * time.Hour)
+                for i := 0; i < 72; i++ {
+                        timestamp := time.Now().Add(-time.Duration(i*5) * time.Minute)
                         
                         telemetry := models.Telemetry{
                                 ID:           telemetryID,
