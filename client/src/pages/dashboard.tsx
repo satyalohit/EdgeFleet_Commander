@@ -10,9 +10,9 @@ import { DeleteDeviceDialog } from "@/components/devices/delete-device-dialog";
 import { Button } from "@/components/ui/button";
 import { Plus, RefreshCw } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { deviceApi, alertApi, statsApi } from "@/services/api";
+import { deviceApi, alertApi, statsApi, telemetryApi } from "@/services/api";
 import { useEffect, useState } from "react";
-import type { Device } from "@/types";
+import type { Device, Telemetry } from "@/types";
 
 export default function Dashboard() {
   const [deviceFormOpen, setDeviceFormOpen] = useState(false);
@@ -36,6 +36,11 @@ export default function Dashboard() {
     queryFn: statsApi.getStats,
   });
 
+  const { data: telemetryData = [], isLoading: telemetryLoading, refetch: refetchTelemetry } = useQuery({
+    queryKey: ["/api/telemetry"],
+    queryFn: () => telemetryApi.getAllTelemetry(1000),
+  });
+
   // Manual refresh function
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -43,7 +48,8 @@ export default function Dashboard() {
       await Promise.all([
         refetchDevices(),
         refetchAlerts(),
-        refetchStats()
+        refetchStats(),
+        refetchTelemetry()
       ]);
     } finally {
       setIsRefreshing(false);
@@ -56,14 +62,24 @@ export default function Dashboard() {
       refetchDevices();
       refetchAlerts();
       refetchStats();
+      refetchTelemetry();
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [refetchDevices, refetchAlerts, refetchStats]);
+  }, [refetchDevices, refetchAlerts, refetchStats, refetchTelemetry]);
 
   const unacknowledgedAlerts = alerts.filter(alert => !alert.acknowledged);
 
-  if (devicesLoading || alertsLoading || statsLoading) {
+  // Helper to get latest telemetry for a device
+  function getLatestTelemetryForDevice(deviceId: number, telemetryData: Telemetry[]): Telemetry | undefined {
+    const deviceTelemetry = telemetryData.filter(t => Number(t.deviceId) === Number(deviceId));
+    if (deviceTelemetry.length === 0) return undefined;
+    return deviceTelemetry.reduce((latest, current) =>
+      new Date(current.timestamp) > new Date(latest.timestamp) ? current : latest
+    );
+  }
+
+  if (devicesLoading || alertsLoading || statsLoading || telemetryLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
@@ -123,20 +139,23 @@ export default function Dashboard() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {devices.map((device) => (
-                <DeviceCard 
-                  key={device.id} 
-                  device={device}
-                  onEdit={(device) => {
-                    setEditingDevice(device);
-                    setDeviceFormOpen(true);
-                  }}
-                  onDelete={(device) => {
-                    setDeviceToDelete(device);
-                    setDeleteDialogOpen(true);
-                  }}
-                />
-              ))}
+              {devices.map((device) => {
+                const latestTelemetry = getLatestTelemetryForDevice(device.id, telemetryData);
+                return (
+                  <DeviceCard 
+                    key={device.id} 
+                    device={{ ...device, telemetry: latestTelemetry }}
+                    onEdit={(device) => {
+                      setEditingDevice(device);
+                      setDeviceFormOpen(true);
+                    }}
+                    onDelete={(device) => {
+                      setDeviceToDelete(device);
+                      setDeleteDialogOpen(true);
+                    }}
+                  />
+                );
+              })}
             </div>
           </div>
 
