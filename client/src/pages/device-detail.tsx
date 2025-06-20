@@ -12,6 +12,8 @@ import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { deviceApi, alertApi } from "@/services/api";
 import { formatTimeAgo, getStatusColor, getStatusLabel, getBatteryColor } from "@/lib/utils";
+import { telemetryApi } from "@/services/api";
+import type { Telemetry } from "@/types";
 
 export default function DeviceDetail() {
   const [, params] = useRoute("/devices/:id");
@@ -28,9 +30,15 @@ export default function DeviceDetail() {
     queryFn: alertApi.getAlerts,
   });
 
+  const { data: telemetryHistory = [], isLoading: telemetryLoading } = useQuery({
+    queryKey: ["/api/devices/" + deviceId + "/telemetry"],
+    queryFn: () => deviceApi.getTelemetry(deviceId, 24), // fetch last 24 hours
+    enabled: !!deviceId,
+  });
+
   const unacknowledgedAlerts = alerts.filter(alert => !alert.acknowledged);
 
-  if (deviceLoading) {
+  if (deviceLoading || telemetryLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
@@ -77,8 +85,8 @@ export default function DeviceDetail() {
     );
   }
 
-  // Generate chart data from telemetry history
-  const chartData = device.telemetryHistory?.slice(0, 20).reverse().map((t, index) => ({
+  const latestTelemetry = telemetryHistory[0];
+  const chartData = telemetryHistory.slice(0, 20).reverse().map((t, index) => ({
     time: new Date(t.timestamp).toLocaleTimeString("en-US", { 
       hour: "2-digit", 
       minute: "2-digit" 
@@ -89,7 +97,6 @@ export default function DeviceDetail() {
     memory: Math.round((t.memoryUsage / t.memoryTotal) * 100)
   })) || [];
 
-  const latestTelemetry = device.telemetryHistory?.[0];
   const deviceAlerts = device.alerts?.slice(0, 5) || [];
 
   return (
